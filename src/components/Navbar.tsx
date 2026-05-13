@@ -1,32 +1,52 @@
 "use client";
-import Link from 'next/link';
-import { ShoppingCart, User } from 'lucide-react';
-import { useCartStore } from '@/lib/store';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ShoppingCart, User, LogOut } from 'lucide-react';
+import { useCartStore } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const items = useCartStore((state) => state.items);
-  // Zliczamy wszystkie butle
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   
-  // Trick dla Next.js, by uniknąć błędu hydratacji
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    // Pobierz sesję i profil
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      if (user) {
+        supabase.from('profiles').select('*').eq('id', user.id).single()
+          .then(({ data }) => setProfile(data));
+      }
+    });
+  }, []);
 
   return (
-    <nav className="fixed w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
+    <nav className="fixed w-full z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
-          <div className="flex-shrink-0">
+          <div className="flex items-center gap-8">
             <Link href="/" className="text-2xl font-black tracking-tighter text-blue-900">
               GAZ<span className="text-blue-500">STAR</span>
             </Link>
+            
+            {/* Status Logowania obok nazwy */}
+            <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 bg-slate-50 rounded-full border border-slate-100">
+              <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                {user ? `${profile?.role || 'klient'}: ${user.email}` : 'Logowanie'}
+              </span>
+            </div>
           </div>
-          <div className="hidden md:flex space-x-8">
-            <Link href="/oferta" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">Oferta</Link>
-          </div>
+
           <div className="flex items-center space-x-6">
-            <Link href="/koszyk" className="text-gray-900 hover:text-blue-600 transition-colors relative">
+            <Link href="/oferta" className="text-sm font-bold text-slate-600 hover:text-blue-600">Oferta</Link>
+            
+            <Link href="/koszyk" className="text-gray-900 hover:text-blue-600 relative">
               <ShoppingCart className="w-5 h-5" />
               {mounted && totalItems > 0 && (
                 <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -34,10 +54,17 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
-            <Link href="/logowanie" className="flex items-center text-sm font-medium bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800 transition-colors">
-              <User className="w-4 h-4 mr-2" />
-              Portal B2B
-            </Link>
+
+            {user ? (
+              <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="p-2 text-slate-400 hover:text-red-500">
+                <LogOut className="w-5 h-5" />
+              </button>
+            ) : (
+              <Link href="/logowanie" className="flex items-center text-sm font-bold bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-blue-600 transition-all">
+                <User className="w-4 h-4 mr-2" />
+                Zaloguj
+              </Link>
+            )}
           </div>
         </div>
       </div>
