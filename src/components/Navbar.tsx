@@ -1,21 +1,26 @@
 "use client";
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart, User, LogOut } from 'lucide-react';
 import { useCartStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import type { Profile } from '@/lib/types';
+
+type AuthUser = { id: string; email?: string } | null;
 
 export default function Navbar() {
   const items = useCartStore((state) => state.items);
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  
+
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
-    // Pobierz sesję i profil
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
       if (user) {
@@ -23,6 +28,19 @@ export default function Navbar() {
           .then(({ data }) => setProfile(data));
       }
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const newUser = session?.user ?? null;
+      setUser(newUser);
+      if (newUser) {
+        supabase.from('profiles').select('*').eq('id', newUser.id).single()
+          .then(({ data }) => setProfile(data));
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   return (
@@ -33,8 +51,7 @@ export default function Navbar() {
             <Link href="/" className="text-2xl font-black tracking-tighter text-blue-900">
               GAZ<span className="text-blue-500">STAR</span>
             </Link>
-            
-            {/* Status Logowania obok nazwy */}
+
             <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 bg-slate-50 rounded-full border border-slate-100">
               <div className={`w-2 h-2 rounded-full ${user ? 'bg-green-500' : 'bg-slate-300'}`}></div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -45,7 +62,7 @@ export default function Navbar() {
 
           <div className="flex items-center space-x-6">
             <Link href="/oferta" className="text-sm font-bold text-slate-600 hover:text-blue-600">Oferta</Link>
-            
+
             <Link href="/koszyk" className="text-gray-900 hover:text-blue-600 relative">
               <ShoppingCart className="w-5 h-5" />
               {mounted && totalItems > 0 && (
@@ -56,7 +73,10 @@ export default function Navbar() {
             </Link>
 
             {user ? (
-              <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="p-2 text-slate-400 hover:text-red-500">
+              <button
+                onClick={() => supabase.auth.signOut().then(() => router.push('/logowanie'))}
+                className="p-2 text-slate-400 hover:text-red-500"
+              >
                 <LogOut className="w-5 h-5" />
               </button>
             ) : (
